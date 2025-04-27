@@ -1,79 +1,275 @@
 #pragma once
+#include <stdint.h>
+#include <string.h>
+#include "AES_base.hpp"
 
-#include <Utils.hpp>
-#ifndef __cplusplus
-#error Do not include the hpp header in a c project!
-#endif //__cplusplus
-//https://github.com/kokke/tiny-AES-c
-extern "C" {
-#include "aes.h"
-}
-
-#include <AES_base/AES_base.hpp>
+#define AES_BLOCK_SIZE 16
+#define AES_256_KEY_SIZE 32
+#define AES_256_NUM_ROUNDS 14
+#define AES_256_EXPANDED_KEY_SIZE (4 * (AES_256_NUM_ROUNDS + 1) * 4) // 240 bytes
 
 class AES_tiny : public AES_base {
-    struct AES_ctx ctx;
+private:
+    typedef struct {
+        uint8_t round_keys[AES_256_EXPANDED_KEY_SIZE];
+        uint8_t sbox[256];
+        uint8_t inv_sbox[256];
+    } AES256_CTX;
+
+    AES256_CTX ctx;
+
+    static uint8_t xtime(uint8_t x) {
+        return (x << 1) ^ ((x >> 7) * 0x1B);
+    }
+
+    static uint8_t gf_mul(uint8_t a, uint8_t b) {
+        uint8_t res = 0;
+        for (int i = 0; i < 8; ++i) {
+            if (b & 1)
+                res ^= a;
+            bool hi = (a & 0x80);
+            a <<= 1;
+            if (hi)
+                a ^= 0x1B;
+            b >>= 1;
+        }
+        return res;
+    }
+
+    static uint8_t gf_pow(uint8_t a, uint8_t n) {
+        uint8_t res = 1;
+        while (n) {
+            if (n & 1)
+                res = gf_mul(res, a);
+            a = gf_mul(a, a);
+            n >>= 1;
+        }
+        return res;
+    }
+
+    static uint8_t gf_inv(uint8_t a) {
+        if (a == 0) return 0;
+        return gf_pow(a, 254); // a^(2^8 - 2) = a^-1 in GF(2^8)
+    }
+
+    static uint8_t affine(uint8_t a) {
+        uint8_t res = a;
+        for (int i = 0; i < 4; ++i)
+            a = (a << 1) | (a >> 7), res ^= a;
+        return res ^ 0x63;
+    }
+
+    void initialize_sboxes() {
+        for (int i = 0; i < 256; ++i) {
+            uint8_t inv = gf_inv(i);
+            ctx.sbox[i] = affine(inv);
+        }
+        for (int i = 0; i < 256; ++i)
+            ctx.inv_sbox[ctx.sbox[i]] = i;
+    }
+
+
+    static void add_round_key(uint8_t* state, const uint8_t* round_key) {
+        for (int i = 0; i < AES_BLOCK_SIZE; ++i)
+            state[i] ^= round_key[i];
+    }
+
+    void sub_bytes(uint8_t* state) {
+        for (int i = 0; i < AES_BLOCK_SIZE; ++i)
+            state[i] = ctx.sbox[state[i]];
+    }
+
+    void inv_sub_bytes(uint8_t* state) {
+        for (int i = 0; i < AES_BLOCK_SIZE; ++i)
+            state[i] = ctx.inv_sbox[state[i]];
+    }
+
+    static void shift_rows(uint8_t* state) {
+        uint8_t tmp;
+        tmp = state[1];
+        state[1] = state[5];
+        state[5] = state[9];
+        state[9] = state[13];
+        state[13] = tmp;
+        tmp = state[2];
+        state[2] = state[10];
+        state[10] = tmp;
+        tmp = state[6];
+        state[6] = state[14];
+        state[14] = tmp;
+        tmp = state[3];
+        state[3] = state[15];
+        state[15] = state[11];
+        state[11] = state[7];
+        state[7] = tmp;
+    }
+
+    static void inv_shift_rows(uint8_t* state) {
+        uint8_t tmp;
+        tmp = state[13];
+        state[13] = state[9];
+        state[9] = state[5];
+        state[5] = state[1];
+        state[1] = tmp;
+        tmp = state[2];
+        state[2] = state[10];
+        state[10] = tmp;
+        tmp = state[6];
+        state[6] = state[14];
+        state[14] = tmp;
+        tmp = state[3];
+        state[3] = state[7];
+        state[7] = state[11];
+        state[11] = state[15];
+        state[15] = tmp;
+    }
+
+    static void mix_columns(uint8_t* state) {
+        for (int i = 0; i < 4; ++i) {
+            uint8_t* col = state + i * 4;
+            uint8_t t = col[0] ^ col[1] ^ col[2] ^ col[3];
+            uint8_t tmp = col[0];
+            col[0] ^= t ^ xtime(col[0] ^ col[1]);
+            col[1] ^= t ^ xtime(col[1] ^ col[2]);
+            col[2] ^= t ^ xtime(col[2] ^ col[3]);
+            col[3] ^= t ^ xtime(col[3] ^ tmp);
+        }
+    }
+
+    static uint8_t mul(uint8_t a, uint8_t b) {
+        uint8_t result = 0;
+        while (b) {
+            if (b & 1) result ^= a;
+            a = xtime(a);
+            b >>= 1;
+        }
+        return result;
+    }
+
+    static void inv_mix_columns(uint8_t* state) {
+        for (int i = 0; i < 4; ++i) {
+            uint8_t* col = state + i * 4;
+            uint8_t a0 = col[0], a1 = col[1], a2 = col[2], a3 = col[3];
+            col[0] = mul(a0, 0x0e) ^ mul(a1, 0x0b) ^ mul(a2, 0x0d) ^ mul(a3, 0x09);
+            col[1] = mul(a0, 0x09) ^ mul(a1, 0x0e) ^ mul(a2, 0x0b) ^ mul(a3, 0x0d);
+            col[2] = mul(a0, 0x0d) ^ mul(a1, 0x09) ^ mul(a2, 0x0e) ^ mul(a3, 0x0b);
+            col[3] = mul(a0, 0x0b) ^ mul(a1, 0x0d) ^ mul(a2, 0x09) ^ mul(a3, 0x0e);
+        }
+    }
+
+    void aes256_key_expansion(const uint8_t* key) {
+        uint8_t temp[4];
+        memcpy(ctx.round_keys, key, 32);
+
+        uint8_t rcon = 1;
+        for (int i = 8; i < 60; ++i) {
+            memcpy(temp, ctx.round_keys + 4 * (i - 1), 4);
+            if (i % 8 == 0) {
+                uint8_t t = temp[0];
+                temp[0] = ctx.sbox[temp[1]];
+                temp[1] = ctx.sbox[temp[2]];
+                temp[2] = ctx.sbox[temp[3]];
+                temp[3] = ctx.sbox[t];
+                temp[0] ^= rcon;
+                rcon = (rcon << 1) ^ (rcon & 0x80 ? 0x1B : 0x00);
+            } else if (i % 8 == 4) {
+                temp[0] = ctx.sbox[temp[0]];
+                temp[1] = ctx.sbox[temp[1]];
+                temp[2] = ctx.sbox[temp[2]];
+                temp[3] = ctx.sbox[temp[3]];
+            }
+            for (int j = 0; j < 4; ++j)
+                ctx.round_keys[4*i + j] = ctx.round_keys[4*(i-8) + j] ^ temp[j];
+        }
+    }
+
+    void aes256_encrypt_block(uint8_t* block) {
+        add_round_key(block, ctx.round_keys);
+        for (int round = 1; round < AES_256_NUM_ROUNDS; ++round) {
+            sub_bytes(block);
+            shift_rows(block);
+            mix_columns(block);
+            add_round_key(block, ctx.round_keys + round * AES_BLOCK_SIZE);
+        }
+        sub_bytes(block);
+        shift_rows(block);
+        add_round_key(block, ctx.round_keys + AES_256_NUM_ROUNDS * AES_BLOCK_SIZE);
+    }
+
+    void aes256_decrypt_block(uint8_t* block) {
+        add_round_key(block, ctx.round_keys + AES_256_NUM_ROUNDS * AES_BLOCK_SIZE);
+        for (int round = AES_256_NUM_ROUNDS - 1; round > 0; --round) {
+            inv_shift_rows(block);
+            inv_sub_bytes(block);
+            add_round_key(block, ctx.round_keys + round * AES_BLOCK_SIZE);
+            inv_mix_columns(block);
+        }
+        inv_shift_rows(block);
+        inv_sub_bytes(block);
+        add_round_key(block, ctx.round_keys);
+    }
+
+    static void increment_counter(uint8_t* counter) {
+        for (int i = AES_BLOCK_SIZE - 1; i >= 0; --i) {
+            if (++counter[i]) break;
+        }
+    }
+
+    void aes256_ctr_crypt(uint8_t* input, uint8_t* output, size_t size, uint8_t* iv) {
+        uint8_t counter[AES_BLOCK_SIZE];
+        uint8_t stream[AES_BLOCK_SIZE];
+        memcpy(counter, iv, AES_BLOCK_SIZE);
+
+        for (size_t i = 0; i < size; i += AES_BLOCK_SIZE) {
+            memcpy(stream, counter, AES_BLOCK_SIZE);
+            aes256_encrypt_block(stream);
+
+            size_t block_len = (size - i > AES_BLOCK_SIZE) ? AES_BLOCK_SIZE : (size - i);
+            for (size_t j = 0; j < block_len; ++j)
+                output[i + j] = input[i + j] ^ stream[j];
+
+            increment_counter(counter);
+        }
+    }
 
 public:
+    AES_tiny() { setName("AES-tiny"); }
 
-    void init(uint8_t* key, uint8_t* iv) {
-        AES_init_ctx_iv(&ctx, key, iv);
+    void init(uint8_t* key, crypto_mode mode, uint8_t* iv) override {
+        AES_base::init(key, mode, iv);
+        initialize_sboxes();
+        aes256_key_expansion(key);
     }
 
-    void encrypt(uint8_t* in, size_t size) {
-        AES_CTR_xcrypt_buffer(&ctx, in, size);
-    }
-
-    int accuracytest(uint64_t& millis) override
-    {
-        uint8_t key[32] = { 0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81,
-                        0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61, 0x08, 0xd7, 0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4 };
-        uint8_t in[64]  = { 0x60, 0x1e, 0xc3, 0x13, 0x77, 0x57, 0x89, 0xa5, 0xb7, 0xa7, 0xf5, 0x04, 0xbb, 0xf3, 0xd2, 0x28,
-                        0xf4, 0x43, 0xe3, 0xca, 0x4d, 0x62, 0xb5, 0x9a, 0xca, 0x84, 0xe9, 0x90, 0xca, 0xca, 0xf5, 0xc5,
-                        0x2b, 0x09, 0x30, 0xda, 0xa2, 0x3d, 0xe9, 0x4c, 0xe8, 0x70, 0x17, 0xba, 0x2d, 0x84, 0x98, 0x8d,
-                        0xdf, 0xc9, 0xc5, 0x8d, 0xb6, 0x7a, 0xad, 0xa6, 0x13, 0xc2, 0xdd, 0x08, 0x45, 0x79, 0x41, 0xa6 };
-
-        uint8_t iv[16]  = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff };
-        uint8_t out[64] = { 0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
-                            0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
-                            0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
-                            0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
-
-        init(key, iv);
-
-        auto startms = Utils::getMillis();
-            encrypt(in, 64);
-        auto stopms = Utils::getMillis();
-        millis = stopms-startms;
-
-        if (0 == memcmp((char *) out, (char *) in, 64)) {
-            printf("SUCCESS!\n");
-            return(0);
-        } else {
-            printf("FAILURE!\n");
-            return(1);
+    void encrypt(uint8_t* in, uint8_t* out, size_t size) override {
+        switch (getCryptoMode()) {
+            case AES_base::MODE_ECB_STANDARD:
+                for (size_t i = 0; i < size; i += AES_BLOCK_SIZE) {
+                    memcpy(out + i, in + i, AES_BLOCK_SIZE);
+                    aes256_encrypt_block(out + i);
+                }
+                break;
+            case AES_base::MODE_CTR_STANDARD:
+                aes256_ctr_crypt(in, out, size, getIV());
+                break;
+            default:
+                throw "Not implemented";
         }
     }
 
-    void speedtest(uint64_t& millis) override
-    {
-        const size_t numbytes = 64*1024*1024;
-        uint8_t key[32] = { 0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81,
-                            0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61, 0x08, 0xd7, 0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4 };
-        uint8_t iv[16]  = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff };
-
-        millis = 0; // default value for failure
-
-        uint8_t *in  = new uint8_t[numbytes];
-
-        if (in != nullptr) {
-            init(key, iv);
-
-            auto startms = Utils::getMillis();
-                encrypt(in, numbytes);
-            auto stopms = Utils::getMillis();
-            millis = stopms - startms;
+    void decrypt(uint8_t* in, uint8_t* out, size_t size) override {
+        switch (getCryptoMode()) {
+            case AES_base::MODE_ECB_STANDARD:
+                for (size_t i = 0; i < size; i += AES_BLOCK_SIZE) {
+                    memcpy(out + i, in + i, AES_BLOCK_SIZE);
+                    aes256_decrypt_block(out + i);
+                }
+                break;
+            case AES_base::MODE_CTR_STANDARD:
+                aes256_ctr_crypt(in, out, size, getIV());
+                break;
+            default:
+                throw "Not implemented";
         }
     }
-
 };

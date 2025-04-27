@@ -12,7 +12,7 @@ int main() {
     //AES_base* codec = new AES_cortexm();
     //AES_base* codec = new AES_ni();
     //AES_base* codec = new AES_ni_sse();
-    AES_base* codecs[] = {new AES_ni(), new AES_ni_sse(), new AES_ni_avx2(), new AES_ni_omp()};
+    AES_base* codecs[] = {new AES_tiny(), new AES_small(), new AES_ni(), new AES_ni_sse(), new AES_ni_avx2(), new AES_ni_omp()};
     for (auto codec : codecs) {
         codec->test(millis_encryption, millis_decryption, speedtestsize);
         std::cout << codec->getName() << " CTR encryption throughput: " << (speedtestsize / millis_encryption) / 1000000. << " GB/s"

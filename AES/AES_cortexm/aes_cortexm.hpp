@@ -19,7 +19,7 @@ public:
         #ifdef __arm__
             AES_256_keyschedule(key, p.rk+32);
         #else
-            #warning "This will not run on x86 (only on Cortex M3/4)"
+            throw "This will not run on x86 (only on Cortex M3/4)";
         #endif
     }
 
@@ -28,12 +28,12 @@ public:
         #ifdef __arm__
             AES_256_encrypt_ctr(&p, in, out, size);
         #else
-            #warning "This will not run on x86 (only on Cortex M3/4)"
+            throw "This will not run on x86 (only on Cortex M3/4)";
         #endif
         memcpy(in, out, size);
     }
 
-    int accuracytest(uint64_t& millis) override
+    int accuracytest()
     {
         /*
         uint8_t key[32] = { 0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81,
@@ -67,7 +67,7 @@ public:
         return 0;
     }
 
-    void speedtest(uint64_t& millis) override
+    void speedtest(uint64_t& millis)
     {
         const size_t numbytes = 64*1024*1024;
         uint8_t key[32] = { 0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81,
