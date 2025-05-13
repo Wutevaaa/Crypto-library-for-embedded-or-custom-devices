@@ -290,7 +290,7 @@ class AES_small : public AES_base {
         }
     }
 
-    void aes256_ctr_crypt(AES256_CTX* ctx, uint8_t* input, uint8_t* output, size_t length, uint8_t* iv) {
+    void aes256_ctr_crypt(AES256_CTX* ctx, uint8_t* input, uint8_t* output, size_t length, const uint8_t* iv) {
         uint8_t counter[AES_BLOCK_SIZE];
         uint8_t stream_block[AES_BLOCK_SIZE];
         size_t i, j;
@@ -312,7 +312,7 @@ class AES_small : public AES_base {
     AES256_CTX ctx;
 public:
     AES_small() {setName("AES-small");}
-    void init(uint8_t* key, crypto_mode mode, uint8_t* iv) override {
+    void init(const uint8_t* key, crypto_mode mode, const uint8_t* iv) override {
         AES_base::init(key, mode, iv);
         switch (mode) {
             case AES_base::MODE_ECB_INPLACE:

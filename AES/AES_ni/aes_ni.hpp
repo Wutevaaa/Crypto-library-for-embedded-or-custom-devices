@@ -112,7 +112,7 @@ private:
     AES256_KEY aeskey;
 public:
     AES_ni() {setName("AES-NI");}
-    void init(uint8_t* key, crypto_mode mode, uint8_t* iv) override {
+    void init(const uint8_t* key, crypto_mode mode, const uint8_t* iv) override {
         AES_base::init(key, mode, iv);
         switch(mode) {
             case AES_base::MODE_ECB_INPLACE:

@@ -127,7 +127,7 @@ private:
 
 public:
     AES_ni_omp() {setName("AES-NI-OMP");}
-    void init(uint8_t* key, crypto_mode mode, uint8_t* iv) override {
+    void init(const uint8_t* key, crypto_mode mode, const uint8_t* iv) override {
         AES_base::init(key, mode, iv);
         switch (mode) {
             case AES_base::MODE_ECB_INPLACE:

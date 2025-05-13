@@ -25,9 +25,8 @@ add_executable(clecd
         AES/AES_ni/aes_ni_avx2.hpp
         AES/AES_bitsliced/aes_bitsliced_sse.hpp
         AES/AES_hls/aes_hls.hpp
-        AES/AES_hls/aes_hls_noopt.hpp
         AES/aes.hpp
         main.cpp
-        )
+        AES/AES_hls/aes_hls.hpp)
 
 target_link_libraries(clecd gomp)

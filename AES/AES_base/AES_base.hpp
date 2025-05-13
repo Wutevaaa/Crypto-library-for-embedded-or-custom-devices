@@ -15,7 +15,7 @@ public:
         MODE_CTR_STANDARD
     } mode_t;
 
-    virtual void init(uint8_t* key, crypto_mode mode = MODE_ECB_INPLACE, uint8_t* iv = NULL) {
+    virtual void init(const uint8_t* key, crypto_mode mode = MODE_ECB_INPLACE, const uint8_t* iv = NULL) {
         mKey = key;
         mMode = mode;
         mIV = iv;
@@ -249,13 +249,13 @@ public:
     }
 
 protected:
-    crypto_mode getCryptoMode() { return mMode; }
-    uint8_t* getKey() { return mKey; }
-    uint8_t* getIV() { return mIV; }
+    crypto_mode getCryptoMode() const { return mMode; }
+    const uint8_t* getKey() const { return mKey; }
+    const uint8_t* getIV() const { return mIV; }
     std::string mName = "N/A";
 
 private:
     crypto_mode mMode;
-    uint8_t* mKey;
-    uint8_t* mIV;
+    const uint8_t* mKey;
+    const uint8_t* mIV;
 };

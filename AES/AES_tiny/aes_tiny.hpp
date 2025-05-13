@@ -215,7 +215,7 @@ private:
         }
     }
 
-    void aes256_ctr_crypt(uint8_t* input, uint8_t* output, size_t size, uint8_t* iv) {
+    void aes256_ctr_crypt(uint8_t* input, uint8_t* output, size_t size, const uint8_t* iv) {
         uint8_t counter[AES_BLOCK_SIZE];
         uint8_t stream[AES_BLOCK_SIZE];
         memcpy(counter, iv, AES_BLOCK_SIZE);
@@ -235,7 +235,7 @@ private:
 public:
     AES_tiny() { setName("AES-tiny"); }
 
-    void init(uint8_t* key, crypto_mode mode, uint8_t* iv) override {
+    void init(const uint8_t* key, crypto_mode mode, const uint8_t* iv) override {
         AES_base::init(key, mode, iv);
         initialize_sboxes();
         aes256_key_expansion(key);
