@@ -9,4 +9,5 @@
 
 #include <aes_ni_omp.hpp> // for x86 with AES-NI extensions
 #include <aes_bitsliced_sse.hpp>
+#include <aes_hls.hpp>
 

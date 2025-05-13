@@ -11,6 +11,7 @@ include_directories(AES/AES_tiny)
 include_directories(AES/AES_cortexm)
 include_directories(AES/AES_ni)
 include_directories(AES/AES_bitsliced)
+include_directories(AES/AES_hls)
 
 include_directories(.)
 
@@ -23,6 +24,8 @@ add_executable(clecd
         AES/AES_ni/aes_ni_sse.hpp
         AES/AES_ni/aes_ni_avx2.hpp
         AES/AES_bitsliced/aes_bitsliced_sse.hpp
+        AES/AES_hls/aes_hls.hpp
+        AES/AES_hls/aes_hls_noopt.hpp
         AES/aes.hpp
         main.cpp
         )
