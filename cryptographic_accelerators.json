@@ -1,7 +1,7 @@
 {
     "schemaVersion": "0.9",
     "basicInfo": {
-        "ipName": "Secured RISC-V Processor with Cryptographic Accelerators (SEC)",
+        "ipName": "Cryptographic Accelerators for RISC-V (SEC)",
         "version": "",
         "project": "ISOLDE",
         "workItem": "T3.5",
